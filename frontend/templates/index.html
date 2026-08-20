@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scalable MPC Framework — Privacy-Preserving Profile Updates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Two-Party Secure Computation · C++ · Sockets · Distributed Point Functions</p>
+    <h1>Your data stays private.<br>The computation doesn't.</h1>
+    <p class="sub">
+      This dashboard drives the actual compiled protocol binaries from
+      <strong>Scalable-MPC-Framework-for-Privacy-Preserving-Profile-Updates</strong> —
+      no simulation. A user matrix <em>U</em> and item matrix <em>V</em> are additively
+      secret-shared across two non-colluding parties. Updating one rating means the
+      parties exchange DPF-masked queries and each locally applies a share of the
+      change — without ever reconstructing the plaintext value.
+    </p>
+
+    <div class="hero-diagram" aria-hidden="true">
+      <div class="hd-node hd-party p0">
+        <span class="hd-node-label">Party 0</span>
+        <span class="hd-node-sub">private share</span>
+      </div>
+      <div class="hd-lock">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+          <rect x="4.5" y="10.5" width="15" height="10" rx="1.5"/>
+          <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+        </svg>
+      </div>
+      <div class="hd-node hd-party p1">
+        <span class="hd-node-label">Party 1</span>
+        <span class="hd-node-sub">private share</span>
+      </div>
+      <div class="hd-arrow">→</div>
+      <div class="hd-node hd-mpc">
+        <span class="hd-node-label">Secure MPC</span>
+        <span class="hd-node-sub">neither sees plaintext</span>
+      </div>
+      <div class="hd-arrow">→</div>
+      <div class="hd-node hd-result">
+        <span class="hd-node-label">Profile updated</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="security-band">
+  <div class="security-band-inner">
+    <div class="sec-card">
+      <span class="sec-icon">🔐</span>
+      <h3>Privacy</h3>
+      <p>A single party's share is uniformly random over the field — it reveals nothing about the real value on its own.</p>
+    </div>
+    <div class="sec-card">
+      <span class="sec-icon">⚡</span>
+      <h3>Distributed</h3>
+      <p>Each party runs its own share of the computation locally, coordinating only through DPF-masked exchanges.</p>
+    </div>
+    <div class="sec-card">
+      <span class="sec-icon">🛡️</span>
+      <h3>Threat model</h3>
+      <p>Compromising one party does not reveal the underlying profile — security holds as long as the two parties don't collude.</p>
+    </div>
+  </div>
+  <p class="security-model-line">
+    <strong>Security model:</strong> two-party additive secret sharing with a semi-honest,
+    non-colluding assumption between the two parties.
+  </p>
+</section>
+
+<main>
+
+  <section class="panel config-panel" id="config-panel">
+    <h2><span class="idx">01</span> Configure the run</h2>
+    <p class="panel-desc">m, n = number of users / items · k = latent dimension · q = number of profile-update queries to execute sequentially.</p>
+    <form id="config-form">
+      <div class="field">
+        <label for="m">Users (m)</label>
+        <input type="number" id="m" name="m" min="1" max="12" value="6">
+      </div>
+      <div class="field">
+        <label for="n">Items (n)</label>
+        <input type="number" id="n" name="n" min="1" max="12" value="6">
+      </div>
+      <div class="field">
+        <label for="k">Latent dim (k)</label>
+        <input type="number" id="k" name="k" min="1" max="8" value="3">
+      </div>
+      <div class="field">
+        <label for="q">Queries (q)</label>
+        <input type="number" id="q" name="q" min="1" max="8" value="3">
+      </div>
+      <button type="submit" id="run-btn">Run protocol</button>
+    </form>
+    <p class="status-line" id="status-line">Checking binaries…</p>
+  </section>
+
+  <section class="panel pipeline-panel">
+    <h2><span class="idx">02</span> Live protocol pipeline</h2>
+
+    <div class="metrics-row" id="metrics-row" hidden>
+      <div class="metric-card">
+        <span class="metric-value" id="metric-exchange-ms">—</span>
+        <span class="metric-label">avg exchange time</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="metric-bytes">—</span>
+        <span class="metric-label">payload / query</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="metric-queries">—</span>
+        <span class="metric-label">queries run</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-value" id="metric-parties">2</span>
+        <span class="metric-label">parties</span>
+      </div>
+    </div>
+
+    <ol class="stepper" id="stepper">
+      <li data-stage="init">
+        <span class="step-num">1</span>
+        <span class="step-body"><span class="stage-label">Generate data &amp; shares</span></span>
+      </li>
+      <li data-stage="dpf">
+        <span class="step-num">2</span>
+        <span class="step-body"><span class="stage-label">Build DPF query key</span></span>
+      </li>
+      <li data-stage="preprocess">
+        <span class="step-num">3</span>
+        <span class="step-body"><span class="stage-label">Preprocessing</span></span>
+      </li>
+      <li data-stage="exchange">
+        <span class="step-num">4</span>
+        <span class="step-body"><span class="stage-label">Party 0 ↔ Party 1 secure exchange</span></span>
+      </li>
+      <li data-stage="update">
+        <span class="step-num">5</span>
+        <span class="step-body"><span class="stage-label">Apply secret-shared update</span></span>
+      </li>
+    </ol>
+    <p class="activity-line" id="activity-line">Waiting to run…</p>
+
+    <div class="query-log" id="query-log"></div>
+  </section>
+
+  <section class="panel parties-panel">
+    <h2><span class="idx">03</span> What each party actually holds</h2>
+    <p class="panel-desc">These are read directly from each party's own files on disk. Compare the two — they look like noise on their own.</p>
+    <div class="parties-grid">
+      <div class="party-card p0">
+        <h3>Party 0</h3>
+        <div class="matrix-block">
+          <span class="matrix-label">U₀ (user shares)</span>
+          <div class="matrix" id="U0-grid"></div>
+        </div>
+        <div class="matrix-block">
+          <span class="matrix-label">V₀ (item shares)</span>
+          <div class="matrix" id="V0-grid"></div>
+        </div>
+      </div>
+      <div class="party-seam" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6">
+          <rect x="4.5" y="10.5" width="15" height="10" rx="1.5"/>
+          <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>
+        </svg>
+      </div>
+      <div class="party-card p1">
+        <h3>Party 1</h3>
+        <div class="matrix-block">
+          <span class="matrix-label">U₁ (user shares)</span>
+          <div class="matrix" id="U1-grid"></div>
+        </div>
+        <div class="matrix-block">
+          <span class="matrix-label">V₁ (item shares)</span>
+          <div class="matrix" id="V1-grid"></div>
+        </div>
+      </div>
+    </div>
+    <p class="parties-caption">Individually: information-theoretically random. Neither share reveals U or V.</p>
+  </section>
+
+  <section class="panel truth-panel">
+    <div class="truth-tag">⚠ restricted — debug / verification mode</div>
+    <h2>Ground truth</h2>
+    <p class="panel-desc">
+      This data exists only to verify correctness — it is not available to Party 0 or
+      Party 1, and nothing in the real protocol ever computes it.
+      <span class="mono-inline">U₀ + U₁ = U</span> · <span class="mono-inline">V₀ + V₁ = V</span>
+    </p>
+    <div class="truth-grid">
+      <div class="matrix-block">
+        <span class="matrix-label">U (users × latent dim)</span>
+        <div class="matrix" id="U-grid"></div>
+      </div>
+      <div class="matrix-block">
+        <span class="matrix-label">V (items × latent dim)</span>
+        <div class="matrix" id="V-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel breach-panel" id="breach-panel">
+    <h2><span class="idx">04</span> Insider-threat simulation</h2>
+    <p class="panel-desc">
+      Play attacker. Compromise one party's server — full root, every file — and see what
+      you actually get. Then see what it takes to go further.
+    </p>
+
+    <div class="server-status-row" id="server-status-row">
+      <div class="server-card" id="server-p0">
+        <span class="server-dot"></span>
+        <span class="server-name">Party 0</span>
+        <span class="server-state">secure</span>
+      </div>
+      <div class="server-card" id="server-p1">
+        <span class="server-dot"></span>
+        <span class="server-name">Party 1</span>
+        <span class="server-state">secure</span>
+      </div>
+    </div>
+
+    <div class="breach-controls">
+      <span class="breach-controls-label">Step 1 — pick a target:</span>
+      <button class="breach-btn p0" id="breach-p0" disabled>Breach Party 0</button>
+      <button class="breach-btn p1" id="breach-p1" disabled>Breach Party 1</button>
+      <button class="breach-reset" id="breach-reset" hidden>Reset</button>
+    </div>
+
+    <div id="breach-empty" class="breach-empty">Run the protocol above first — the breach uses that run's live state.</div>
+
+    <div id="breach-stage-1" class="breach-stage" hidden>
+      <div class="exfil-panel">
+        <div class="exfil-header">
+          <span class="exfil-badge">exfiltrated</span>
+          <span id="exfil-title">Files pulled from Party 0's disk</span>
+        </div>
+        <div class="exfil-body">
+          <div class="matrix-block">
+            <span class="matrix-label" id="breach-u-label">U shares</span>
+            <div class="matrix attacker" id="breach-U-grid"></div>
+          </div>
+          <div class="matrix-block">
+            <span class="matrix-label" id="breach-v-label">V shares</span>
+            <div class="matrix attacker" id="breach-V-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="breach-analysis">
+        <div class="histogram-block">
+          <span class="matrix-label">Value distribution (field is 0–63)</span>
+          <div class="histogram" id="breach-histogram"></div>
+        </div>
+
+        <div class="certainty-block">
+          <span class="matrix-label">Attacker's certainty about the real values</span>
+          <div class="certainty-bar">
+            <div class="certainty-fill" id="certainty-fill" style="width:0%"></div>
+          </div>
+          <span class="certainty-caption" id="certainty-caption">0% — one share alone determines nothing</span>
+        </div>
+
+        <div class="verdict verdict-fail">
+          <strong>No usable signal.</strong> Every value here is uniform over
+          <code>Z₆₄</code>, independent of the real profile — this isn't "hard to
+          crack," it's information-theoretically undetermined: for any value the
+          attacker guesses, there's an equally likely share on the other party
+          that would make it true. More compute doesn't help.
+        </div>
+        <button class="breach-btn escalate" id="breach-escalate">
+          Step 2 — also breach the other party
+        </button>
+      </div>
+    </div>
+
+    <div id="breach-stage-2" class="breach-stage" hidden>
+      <div class="verdict verdict-success">
+        <strong>Full reconstruction achieved</strong> — but only because <em>both</em>,
+        independently-operated parties were compromised at once. Add the second
+        party's shares back and the real profile falls out exactly:
+      </div>
+      <div class="reconstruct-grid">
+        <div class="matrix-block">
+          <span class="matrix-label">Reconstructed U (share + share)</span>
+          <div class="matrix" id="recon-U-grid"></div>
+        </div>
+        <div class="matrix-block">
+          <span class="matrix-label">Reconstructed V (share + share)</span>
+          <div class="matrix" id="recon-V-grid"></div>
+        </div>
+      </div>
+      <p class="breach-footnote">
+        This is the whole security argument in one demo: a breach of Party 0 <em>or</em>
+        Party 1 alone — the realistic insider-threat / single-server-compromise case —
+        leaks nothing. An attacker needs both, run by separate operators, breached
+        simultaneously.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>Driving the real <code>run1</code>–<code>run7</code> binaries over local sockets and filesystem exchange · Flask bridge · <a href="https://github.com/mejatin/Scalable-MPC-Framework-for-Privacy-Preserving-Profile-Updates" target="_blank" rel="noopener">source</a></p>
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

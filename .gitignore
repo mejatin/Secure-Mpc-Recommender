@@ -1,0 +1,21 @@
+# Compiled C++ binaries (built locally via build.sh — never commit these)
+mpc-protocol/Gen_queries/run1
+mpc-protocol/Gen_queries/run2
+mpc-protocol/Communication/run3
+mpc-protocol/Communication/run4
+mpc-protocol/files/party0/run5
+mpc-protocol/files/party1/run6
+mpc-protocol/Updater/run7
+mpc-protocol/Main/main
+*.o
+*.out
+
+# Python
+frontend/.venv/
+frontend/__pycache__/
+*.pyc
+
+# OS/editor junk
+.DS_Store
+.vscode/
+*.swp
