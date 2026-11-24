@@ -36,7 +36,6 @@ void runExe(const std::string &exePath, const std::string &args = "")
     if (ret != 0)
         std::cerr << "[ERROR] Failed: " << cmd << "\n";
 }
-// =====================================================
 
 std::vector<std::vector<int>> readFileToMatrix(const std::string &file_path, int n, int columns)
 {
@@ -83,7 +82,6 @@ int main(int argv, char **argc)
     std::vector<std::vector<int>> U1_share = readFileToMatrix(U1_path, m, k);
     std::vector<std::vector<int>> V1_share = readFileToMatrix(V1_path, n, k);
 
-    // --- your print statements (unchanged) ---
     std::cout << "The matrix U is : \n";
     for (const auto &row : U_martix)
     {
