@@ -8,7 +8,6 @@
 #include <thread>
 #include "includes/filetools.h"
 
-// ===== FIXED runExe() — THE ONLY CHANGE YOU NEED =====
 void runExe(const std::string &exePath, const std::string &args = "")
 {
     // get current working directory
